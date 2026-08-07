@@ -128,9 +128,20 @@ body {
   transition: all 0.2s ease;
 }
 
-.icon-action-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-  transform: translateY(-1px);
+.icon-action-btn.active-music {
+  background: rgba(246, 211, 101, 0.2);
+  border-color: var(--accent-yellow);
+  color: var(--accent-yellow);
+  box-shadow: 0 0 15px rgba(246, 211, 101, 0.4);
+}
+
+.music-spin {
+  animation: musicPulse 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes musicPulse {
+  from { transform: scale(1); filter: drop-shadow(0 0 2px var(--accent-yellow)); }
+  to { transform: scale(1.18); filter: drop-shadow(0 0 8px var(--accent-yellow)); }
 }
 
 .nav-btn {

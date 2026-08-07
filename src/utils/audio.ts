@@ -1,8 +1,11 @@
-// Web Audio API Synthesizer for lag-free retro-futuristic sound effects
+// Web Audio API Synthesizer for lag-free retro-futuristic sound effects & background music
 
 class SoundSystem {
   private ctx: AudioContext | null = null;
   public soundEnabled: boolean = true;
+  public bgmEnabled: boolean = false;
+  private bgmTimer: number | null = null;
+  private bgmStep: number = 0;
 
   constructor() {
     // AudioContext will be initialized on first user gesture
@@ -17,6 +20,114 @@ class SoundSystem {
     }
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume();
+    }
+  }
+
+  public toggleBgm(): boolean {
+    this.bgmEnabled = !this.bgmEnabled;
+    if (this.bgmEnabled) {
+      this.startBgm();
+    } else {
+      this.stopBgm();
+    }
+    return this.bgmEnabled;
+  }
+
+  public startBgm() {
+    this.initCtx();
+    if (this.bgmTimer) return;
+
+    this.bgmStep = 0;
+    // 128 BPM = ~117ms per 16th note step
+    this.bgmTimer = window.setInterval(() => {
+      if (!this.bgmEnabled) {
+        this.stopBgm();
+        return;
+      }
+      this.playBgmStep();
+    }, 117);
+  }
+
+  public stopBgm() {
+    if (this.bgmTimer) {
+      clearInterval(this.bgmTimer);
+      this.bgmTimer = null;
+    }
+  }
+
+  private playBgmStep() {
+    if (!this.ctx) return;
+
+    const step = this.bgmStep % 32;
+    this.bgmStep++;
+
+    const now = this.ctx.currentTime;
+
+    // Synthwave Bassline Sequence (A Minor -> F Major -> C Major -> G Major)
+    const bassNotes = [
+      // Bar 1: Am (110 Hz = A2)
+      110, 110, 220, 110, 110, 220, 110, 165,
+      // Bar 2: F (87.31 Hz = F2)
+      87.31, 87.31, 174.61, 87.31, 87.31, 174.61, 87.31, 130.81,
+      // Bar 3: C (130.81 Hz = C3)
+      130.81, 130.81, 261.63, 130.81, 130.81, 261.63, 130.81, 196,
+      // Bar 4: G (98 Hz = G2)
+      98, 98, 196, 98, 98, 196, 98, 146.83,
+    ];
+
+    const currentBassFreq = bassNotes[step];
+
+    // Play Bass Note
+    try {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(currentBassFreq, now);
+
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.005, now + 0.1);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.1);
+    } catch (e) {
+      // Ignore audio glitches
+    }
+
+    // Melodic Synth Arpeggio on specific steps
+    const synthNotes = [
+      440, 523.25, 659.25, 880, // Am
+      349.23, 440, 523.25, 698.46, // F
+      261.63, 329.63, 392, 523.25, // C
+      392, 493.88, 587.33, 783.99, // G
+    ];
+
+    if (step % 2 === 0) {
+      try {
+        const chordGroup = Math.floor(step / 8);
+        const noteIdx = (step / 2) % 4;
+        const synthFreq = synthNotes[chordGroup * 4 + noteIdx];
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(synthFreq, now);
+
+        gain.gain.setValueAtTime(0.05, now);
+        gain.gain.exponentialRampToValueAtTime(0.002, now + 0.15);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.15);
+      } catch (e) {
+        // Ignore audio glitches
+      }
     }
   }
 

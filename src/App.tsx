@@ -66,6 +66,7 @@ function App() {
   const [aiDifficulty, setAIDifficulty] = useState<AIDifficulty>('medium');
   const [currentUser, setCurrentUser] = useState<PlayerProfile | null>(getStoredUser());
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [bgmEnabled, setBgmEnabled] = useState(false);
 
   // Avatars
   const [leftAvatar, setLeftAvatar] = useState<string>(
@@ -926,6 +927,11 @@ function App() {
         }}
         soundEnabled={soundEnabled}
         onToggleSound={() => setSoundEnabled(!soundEnabled)}
+        bgmEnabled={bgmEnabled}
+        onToggleBgm={() => {
+          const nextState = soundFx.toggleBgm();
+          setBgmEnabled(nextState);
+        }}
       />
 
       {/* Main Scoreboard Header */}

@@ -3,6 +3,7 @@ import type { PlayerProfile, GameMode } from '../types/game';
 import {
   Volume2,
   VolumeX,
+  Music,
   User,
   Globe,
   Bot,
@@ -18,6 +19,8 @@ interface Props {
   onOpenCharacterModal: () => void;
   soundEnabled: boolean;
   onToggleSound: () => void;
+  bgmEnabled: boolean;
+  onToggleBgm: () => void;
 }
 
 export const Navbar: React.FC<Props> = ({
@@ -28,6 +31,8 @@ export const Navbar: React.FC<Props> = ({
   onOpenCharacterModal,
   soundEnabled,
   onToggleSound,
+  bgmEnabled,
+  onToggleBgm,
 }) => {
   return (
     <header className="top-navbar">
@@ -64,9 +69,17 @@ export const Navbar: React.FC<Props> = ({
       {/* Action Controls */}
       <div className="nav-actions">
         <button
+          className={`icon-action-btn ${bgmEnabled ? 'active-music' : ''}`}
+          onClick={onToggleBgm}
+          title={bgmEnabled ? 'Matikan Musik Backsound' : 'Putar Musik Backsound'}
+        >
+          <Music size={20} className={bgmEnabled ? 'music-spin' : ''} />
+        </button>
+
+        <button
           className="icon-action-btn"
           onClick={onToggleSound}
-          title={soundEnabled ? 'Mute Suara' : 'Aktifkan Suara'}
+          title={soundEnabled ? 'Mute Efek Suara' : 'Aktifkan Efek Suara'}
         >
           {soundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
         </button>
