@@ -26,6 +26,8 @@ export interface PlayerProfile {
   email?: string;
   wins: number;
   matches: number;
+  level?: number;
+  xp?: number;
 }
 
 export interface BallState {
@@ -36,6 +38,8 @@ export interface BallState {
   radius: number;
   speed: number;
   isFireball?: boolean;
+  isUltimate?: boolean;
+  trailHistory: Array<{ x: number; y: number; radius: number; alpha: number }>;
 }
 
 export interface PaddleState {
@@ -43,6 +47,7 @@ export interface PaddleState {
   score: number;
   height: number;
   speed: number;
+  rage: number; // 0 - 100%
   isFrozen?: boolean;
   shieldActive?: boolean;
   activePowerUp?: ActivePowerUp | null;
@@ -57,6 +62,24 @@ export interface Particle {
   color: string;
   alpha: number;
   decay: number;
+  type?: 'spark' | 'ring' | 'star' | 'flame';
+}
+
+export interface Shockwave {
+  x: number;
+  y: number;
+  radius: number;
+  maxRadius: number;
+  color: string;
+  alpha: number;
+}
+
+export interface AnnouncerBanner {
+  text: string;
+  subtext?: string;
+  color: string;
+  alpha: number;
+  scale: number;
 }
 
 export interface MatchStats {
@@ -65,9 +88,11 @@ export interface MatchStats {
   powerupsCollected: number;
   leftHitCount: number;
   rightHitCount: number;
+  maxCombo: number;
+  ultimatesUsed: number;
 }
 
 export interface PeerMessage {
-  type: 'INIT_STATE' | 'STATE_UPDATE' | 'PLAYER_ACTION' | 'REMATCH' | 'PING' | 'PADDLE_MOVE';
+  type: 'INIT_STATE' | 'STATE_UPDATE' | 'PLAYER_ACTION' | 'REMATCH' | 'PING' | 'PADDLE_MOVE' | 'TRIGGER_ULTIMATE';
   payload: any;
 }

@@ -9,6 +9,7 @@ import { VictoryModal } from './components/VictoryModal';
 import { TouchControls } from './components/TouchControls';
 import type {
   AIDifficulty,
+  AnnouncerBanner,
   BallState,
   GameMode,
   MatchStats,
@@ -18,12 +19,13 @@ import type {
   PlayerProfile,
   PowerUpItem,
   PowerUpType,
+  Shockwave,
 } from './types/game';
 import { soundFx } from './utils/audio';
 import { getStoredUser, PRESET_AVATARS } from './utils/playerProfile';
 import { updateAIPaddleY } from './utils/ai';
 import { multiplayerManager } from './utils/multiplayer';
-import { Play, RotateCcw, Bot, Zap, Sparkles } from 'lucide-react';
+import { Play, RotateCcw, Bot, Zap, Sparkles, Flame } from 'lucide-react';
 
 const FIELD_WIDTH = 960;
 const FIELD_HEIGHT = 560;
@@ -33,8 +35,8 @@ const BALL_RADIUS = 10;
 const WIN_SCORE = 5;
 const BASE_PADDLE_SPEED = 8.5;
 const INITIAL_BALL_SPEED = 6.8;
-const HIT_SPEED_BOOST = 0.6;
-const MAX_BALL_SPEED = 16.0;
+const HIT_SPEED_BOOST = 0.65;
+const MAX_BALL_SPEED = 18.0;
 const MAX_BOUNCE_ANGLE = Math.PI / 3;
 
 const POWERUP_TYPES: PowerUpType[] = ['fireball', 'speed', 'freeze', 'shield', 'mega'];
@@ -50,6 +52,8 @@ const freshBall = (direction: number = 1): BallState => ({
   radius: BALL_RADIUS,
   speed: INITIAL_BALL_SPEED,
   isFireball: false,
+  isUltimate: false,
+  trailHistory: [],
 });
 
 function App() {
@@ -68,7 +72,7 @@ function App() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [bgmEnabled, setBgmEnabled] = useState(false);
 
-  // Avatars
+  // Avatars & Players
   const [leftAvatar, setLeftAvatar] = useState<string>(
     currentUser ? currentUser.avatar : PRESET_AVATARS[0].url
   );
@@ -89,6 +93,12 @@ function App() {
   const [isOnlineConnected, setIsOnlineConnected] = useState(false);
   const [roomCode, setRoomCode] = useState('');
 
+  // Combo & Ultimate State
+  const [comboCount, setComboCount] = useState<number>(0);
+  const comboCountRef = useRef<number>(0);
+  const [leftRage, setLeftRage] = useState<number>(0);
+  const [rightRage, setRightRage] = useState<number>(0);
+
   // Physics refs
   const ballRef = useRef<BallState>(freshBall(1));
   const leftRef = useRef<PaddleState>({
@@ -96,19 +106,24 @@ function App() {
     score: 0,
     height: BASE_PADDLE_HEIGHT,
     speed: BASE_PADDLE_SPEED,
+    rage: 0,
   });
   const rightRef = useRef<PaddleState>({
     y: FIELD_HEIGHT / 2 - BASE_PADDLE_HEIGHT / 2,
     score: 0,
     height: BASE_PADDLE_HEIGHT,
     speed: BASE_PADDLE_SPEED,
+    rage: 0,
   });
 
-  // Powerups & FX state
+  // Juice & FX state
   const powerUpsRef = useRef<PowerUpItem[]>([]);
   const particlesRef = useRef<Particle[]>([]);
+  const shockwavesRef = useRef<Shockwave[]>([]);
+  const announcerRef = useRef<AnnouncerBanner | null>(null);
   const lastPowerUpSpawnRef = useRef<number>(Date.now());
   const cameraShakeRef = useRef<number>(0);
+  const hitstopRef = useRef<number>(0); // Hitstop freeze frame
 
   // Match statistics
   const [stats, setStats] = useState<MatchStats>({
@@ -117,6 +132,8 @@ function App() {
     powerupsCollected: 0,
     leftHitCount: 0,
     rightHitCount: 0,
+    maxCombo: 0,
+    ultimatesUsed: 0,
   });
 
   const [scores, setScores] = useState({ left: 0, right: 0 });
@@ -139,7 +156,7 @@ function App() {
     soundFx.soundEnabled = soundEnabled;
   }, [soundEnabled]);
 
-  // Sync user profile changes to left player
+  // Sync user profile changes
   useEffect(() => {
     if (currentUser) {
       setLeftAvatar(currentUser.avatar);
@@ -159,7 +176,7 @@ function App() {
     }
   }, []);
 
-  // Update image elements whenever avatars change
+  // Update image elements
   useEffect(() => {
     const imgL = new Image();
     imgL.crossOrigin = 'anonymous';
@@ -184,19 +201,82 @@ function App() {
     cameraShakeRef.current = intensity;
   };
 
-  const spawnParticles = (x: number, y: number, color: string, count: number = 12) => {
+  const triggerHitstop = (durationMs: number = 20) => {
+    hitstopRef.current = Date.now() + durationMs;
+  };
+
+  const triggerAnnouncer = (text: string, color: string = '#f6d365', subtext?: string) => {
+    announcerRef.current = {
+      text,
+      subtext,
+      color,
+      alpha: 1.0,
+      scale: 1.6,
+    };
+  };
+
+  const spawnParticles = (x: number, y: number, color: string, count: number = 14) => {
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = 1.5 + Math.random() * 4.5;
+      const speed = 2.0 + Math.random() * 5.0;
       particlesRef.current.push({
         x,
         y,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        radius: 2 + Math.random() * 3,
+        radius: 2 + Math.random() * 3.5,
         color,
         alpha: 1.0,
         decay: 0.02 + Math.random() * 0.03,
+      });
+    }
+  };
+
+  const spawnShockwave = (x: number, y: number, color: string = '#7be3ff') => {
+    shockwavesRef.current.push({
+      x,
+      y,
+      radius: 5,
+      maxRadius: 45,
+      color,
+      alpha: 0.9,
+    });
+  };
+
+  const triggerUltimateSkill = (side: 'left' | 'right') => {
+    const player = side === 'left' ? leftRef.current : rightRef.current;
+    if (player.rage < 100) return;
+
+    player.rage = 0;
+    if (side === 'left') setLeftRage(0);
+    else setRightRage(0);
+
+    const ball = ballRef.current;
+    ball.isUltimate = true;
+    ball.isFireball = true;
+    const direction = side === 'left' ? 1 : -1;
+
+    ball.vx = INITIAL_BALL_SPEED * 1.85 * direction;
+    ball.vy = (Math.random() - 0.5) * 8;
+
+    soundFx.playUltimateSmash();
+    triggerCameraShake(18);
+    triggerHitstop(40);
+    spawnShockwave(ball.x, ball.y, '#ff33cc');
+    spawnParticles(ball.x, ball.y, '#ff33cc', 30);
+
+    triggerAnnouncer(
+      `🔥 ${side === 'left' ? leftName : rightName} METEOR ULTIMATE!! 🔥`,
+      '#ff33cc',
+      'SUPER SMASH HIT!'
+    );
+
+    setStats((s) => ({ ...s, ultimatesUsed: s.ultimatesUsed + 1 }));
+
+    if (gameMode === 'online' && multiplayerManager.isConnected) {
+      multiplayerManager.sendMessage({
+        type: 'TRIGGER_ULTIMATE',
+        payload: { side },
       });
     }
   };
@@ -220,6 +300,9 @@ function App() {
   const resetRound = (direction: number = 1) => {
     ballRef.current = freshBall(direction);
     powerUpsRef.current = [];
+    comboCountRef.current = 0;
+    setComboCount(0);
+
     leftRef.current.height = BASE_PADDLE_HEIGHT;
     leftRef.current.speed = BASE_PADDLE_SPEED;
     leftRef.current.isFrozen = false;
@@ -237,14 +320,19 @@ function App() {
       score: 0,
       height: BASE_PADDLE_HEIGHT,
       speed: BASE_PADDLE_SPEED,
+      rage: 0,
     };
     rightRef.current = {
       y: FIELD_HEIGHT / 2 - BASE_PADDLE_HEIGHT / 2,
       score: 0,
       height: BASE_PADDLE_HEIGHT,
       speed: BASE_PADDLE_SPEED,
+      rage: 0,
     };
+    setLeftRage(0);
+    setRightRage(0);
     particlesRef.current = [];
+    shockwavesRef.current = [];
     powerUpsRef.current = [];
     setScores({ left: 0, right: 0 });
     setMatchWinner(null);
@@ -254,6 +342,8 @@ function App() {
       powerupsCollected: 0,
       leftHitCount: 0,
       rightHitCount: 0,
+      maxCombo: 0,
+      ultimatesUsed: 0,
     });
     resetRound(Math.random() > 0.5 ? 1 : -1);
   };
@@ -308,12 +398,16 @@ function App() {
       } else {
         leftRef.current.y = msg.payload.y;
       }
+    } else if (msg.type === 'TRIGGER_ULTIMATE') {
+      triggerUltimateSkill(msg.payload.side);
     } else if (msg.type === 'STATE_UPDATE' && !multiplayerManager.isHost) {
-      // Guest syncs state from Host
       ballRef.current = msg.payload.ball;
       leftRef.current = msg.payload.left;
       rightRef.current = msg.payload.right;
       setScores(msg.payload.scores);
+      setLeftRage(msg.payload.left.rage);
+      setRightRage(msg.payload.right.rage);
+      setComboCount(msg.payload.comboCount || 0);
       powerUpsRef.current = msg.payload.powerups || [];
       if (msg.payload.matchWinner) {
         setMatchWinner(msg.payload.matchWinner);
@@ -396,6 +490,15 @@ function App() {
         serveBall();
       }
 
+      // Ultimate Skill Keys: 'E' for Left, 'Enter' for Right
+      if (e.key.toLowerCase() === 'e') {
+        triggerUltimateSkill('left');
+      }
+
+      if (e.key === 'Enter') {
+        triggerUltimateSkill('right');
+      }
+
       if (e.key.toLowerCase() === 'r') {
         resetMatch();
       }
@@ -414,7 +517,7 @@ function App() {
     };
   }, []);
 
-  // Main Canvas & Game Physics Loop
+  // Main Canvas Graphics & Juice Loop
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -455,8 +558,9 @@ function App() {
       context.fillStyle = bgGrad;
       context.fillRect(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
 
-      // Cyber Grid Lines
-      context.strokeStyle = 'rgba(123, 227, 255, 0.04)';
+      // Cyber Grid Lines (Pulsing to rhythm)
+      const pulseOpacity = 0.03 + Math.sin(Date.now() / 250) * 0.02;
+      context.strokeStyle = `rgba(123, 227, 255, ${pulseOpacity})`;
       context.lineWidth = 1;
       for (let x = 0; x < FIELD_WIDTH; x += 40) {
         context.beginPath();
@@ -482,6 +586,26 @@ function App() {
       const left = leftRef.current;
       const right = rightRef.current;
       const ball = ballRef.current;
+
+      // Draw Shockwaves
+      shockwavesRef.current.forEach((sw, idx) => {
+        sw.radius += 2.5;
+        sw.alpha -= 0.03;
+
+        if (sw.alpha <= 0 || sw.radius >= sw.maxRadius) {
+          shockwavesRef.current.splice(idx, 1);
+          return;
+        }
+
+        context.save();
+        context.beginPath();
+        context.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+        context.strokeStyle = sw.color;
+        context.globalAlpha = sw.alpha;
+        context.lineWidth = 3;
+        context.stroke();
+        context.restore();
+      });
 
       // Draw Power-ups
       powerUpsRef.current.forEach((pw) => {
@@ -541,8 +665,11 @@ function App() {
 
         context.save();
 
-        // Frozen paddle aura
-        if (paddle.isFrozen) {
+        // Rage 100% Glowing Aura
+        if (paddle.rage >= 100) {
+          context.shadowColor = '#ff33cc';
+          context.shadowBlur = 25;
+        } else if (paddle.isFrozen) {
           context.shadowColor = '#33ccff';
           context.shadowBlur = 20;
         }
@@ -561,7 +688,7 @@ function App() {
         if (img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
           context.clip();
 
-          // Object-fit: cover cropping math to ensure image aspect ratio is never distorted (gepeng)
+          // Object-fit cover cropping math
           const imgAspect = img.naturalWidth / img.naturalHeight;
           const boxAspect = targetWidth / targetHeight;
 
@@ -635,14 +762,34 @@ function App() {
         context.restore();
       });
 
+      // Draw Ball Comet Trail
+      if (ball.trailHistory) {
+        ball.trailHistory.forEach((t) => {
+          context.save();
+          context.beginPath();
+          context.arc(t.x, t.y, t.radius, 0, Math.PI * 2);
+          context.fillStyle = ball.isUltimate
+            ? '#ff33cc'
+            : ball.isFireball
+            ? '#ff5533'
+            : '#7be3ff';
+          context.globalAlpha = t.alpha;
+          context.fill();
+          context.restore();
+        });
+      }
+
       // Draw Ball
       context.save();
-      if (ball.isFireball) {
+      if (ball.isUltimate) {
+        context.shadowColor = '#ff33cc';
+        context.shadowBlur = 30;
+        context.fillStyle = '#ff77ff';
+        spawnParticles(ball.x, ball.y, '#ff33cc', 2);
+      } else if (ball.isFireball) {
         context.shadowColor = '#ff5533';
         context.shadowBlur = 25;
         context.fillStyle = '#ff7733';
-
-        // Fire trail
         spawnParticles(ball.x, ball.y, '#ff4400', 1);
       } else {
         context.shadowColor = '#7be3ff';
@@ -655,6 +802,47 @@ function App() {
       context.fill();
       context.restore();
 
+      // Live Rally Combo Watermark Badge in Court Center
+      if (comboCountRef.current >= 3) {
+        context.save();
+        context.font = '900 28px sans-serif';
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.fillStyle = 'rgba(246, 211, 101, 0.25)';
+        context.fillText(
+          `⚡ ${comboCountRef.current}x RALLY COMBO!`,
+          FIELD_WIDTH / 2,
+          FIELD_HEIGHT / 2 - 80
+        );
+        context.restore();
+      }
+
+      // Announcer Text Banner
+      if (announcerRef.current && announcerRef.current.alpha > 0) {
+        const ann = announcerRef.current;
+        ann.alpha -= 0.018;
+        ann.scale = Math.max(1.0, ann.scale - 0.02);
+
+        context.save();
+        context.translate(FIELD_WIDTH / 2, FIELD_HEIGHT / 2 - 30);
+        context.scale(ann.scale, ann.scale);
+        context.font = '900 32px sans-serif';
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.fillStyle = ann.color;
+        context.shadowColor = ann.color;
+        context.shadowBlur = 20;
+        context.globalAlpha = Math.max(0, ann.alpha);
+        context.fillText(ann.text, 0, 0);
+
+        if (ann.subtext) {
+          context.font = '700 16px sans-serif';
+          context.fillStyle = '#ffffff';
+          context.fillText(ann.subtext, 0, 36);
+        }
+        context.restore();
+      }
+
       if (winnerRef.current) {
         context.fillStyle = 'rgba(6, 10, 18, 0.65)';
         context.fillRect(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
@@ -664,6 +852,12 @@ function App() {
     };
 
     const step = (timestamp: number) => {
+      // Hitstop delay check
+      if (Date.now() < hitstopRef.current) {
+        requestRef.current = window.requestAnimationFrame(step);
+        return;
+      }
+
       const lastTime = lastTimeRef.current || timestamp;
       const delta = Math.min(2, (timestamp - lastTime) / 16.6667);
       lastTimeRef.current = timestamp;
@@ -675,19 +869,16 @@ function App() {
 
       // Handle Paddle Movements
       if (!winnerRef.current) {
-        // Touch controls
         if (touchDirectionsRef.current.left === 'up') left.y -= left.speed * delta;
         if (touchDirectionsRef.current.left === 'down') left.y += left.speed * delta;
         if (touchDirectionsRef.current.right === 'up') right.y -= right.speed * delta;
         if (touchDirectionsRef.current.right === 'down') right.y += right.speed * delta;
 
-        // Keyboard left player
         if (!left.isFrozen) {
           if (keys['w']) left.y -= left.speed * delta;
           if (keys['s']) left.y += left.speed * delta;
         }
 
-        // Right Player logic according to GameMode
         if (gameMode === 'vs-ai' && !pausedRef.current) {
           right.y = updateAIPaddleY(
             right.y,
@@ -696,6 +887,11 @@ function App() {
             aiDifficulty,
             delta
           );
+
+          // AI auto uses Ultimate when 100% full!
+          if (right.rage >= 100 && Math.random() < 0.05) {
+            triggerUltimateSkill('right');
+          }
         } else if (gameMode === 'local' && !right.isFrozen) {
           if (keys['arrowup']) right.y -= right.speed * delta;
           if (keys['arrowdown']) right.y += right.speed * delta;
@@ -705,15 +901,23 @@ function App() {
       left.y = clamp(left.y, 24, FIELD_HEIGHT - 24 - left.height);
       right.y = clamp(right.y, 24, FIELD_HEIGHT - 24 - right.height);
 
-      // Physics & Game loop (Only Host or Local drives physics)
       const isPhysicsHost = gameMode !== 'online' || multiplayerManager.isHost;
 
       if (isPhysicsHost && !pausedRef.current && !winnerRef.current) {
-        // Spawn Powerups periodically
         if (Date.now() - lastPowerUpSpawnRef.current > 12000) {
           spawnRandomPowerUp();
           lastPowerUpSpawnRef.current = Date.now();
         }
+
+        // Store Trail History
+        ball.trailHistory.unshift({
+          x: ball.x,
+          y: ball.y,
+          radius: ball.radius * 0.8,
+          alpha: 0.6,
+        });
+        if (ball.trailHistory.length > 8) ball.trailHistory.pop();
+        ball.trailHistory.forEach((t) => (t.alpha -= 0.07));
 
         ball.x += ball.vx * delta;
         ball.y += ball.vy * delta;
@@ -736,6 +940,7 @@ function App() {
             '#7be3ff',
             6
           );
+          spawnShockwave(ball.x, ball.y <= 24 ? 24 : FIELD_HEIGHT - 24);
         }
 
         // Power-up Collision Check
@@ -743,7 +948,8 @@ function App() {
           const dist = Math.hypot(ball.x - pw.x, ball.y - pw.y);
           if (dist <= ball.radius + pw.radius) {
             soundFx.playPowerup();
-            spawnParticles(pw.x, pw.y, '#f6d365', 18);
+            spawnParticles(pw.x, pw.y, '#f6d365', 20);
+            spawnShockwave(pw.x, pw.y, '#f6d365');
 
             const lastHitterSide = ball.vx > 0 ? left : right;
             const opponentSide = ball.vx > 0 ? right : left;
@@ -785,6 +991,13 @@ function App() {
           ball.y <= right.y + right.height;
 
         if (leftHit && ball.vx < 0) {
+          comboCountRef.current += 1;
+          setComboCount(comboCountRef.current);
+
+          // Charge Left Rage +20%
+          left.rage = Math.min(100, left.rage + 20);
+          setLeftRage(left.rage);
+
           const impact = (ball.y - (left.y + left.height / 2)) / (left.height / 2);
           const angle = impact * MAX_BOUNCE_ANGLE;
           const currentSpeed = Math.hypot(ball.vx, ball.vy);
@@ -794,18 +1007,33 @@ function App() {
           ball.vy = Math.sin(angle) * newSpeed;
           ball.x = leftPaddleX + ball.radius + 2;
 
-          soundFx.playHit(ball.isFireball);
-          spawnParticles(ball.x, ball.y, '#7be3ff', 10);
-          triggerCameraShake(ball.isFireball ? 9 : 4);
+          soundFx.playHit(ball.isFireball, comboCountRef.current);
+          spawnParticles(ball.x, ball.y, '#7be3ff', 12);
+          spawnShockwave(ball.x, ball.y, '#7be3ff');
+          triggerCameraShake(ball.isFireball ? 10 : 5);
+
+          // Announcer Milestone Popups
+          if (comboCountRef.current === 3) triggerAnnouncer('GREAT RETURN!', '#7be3ff');
+          if (comboCountRef.current === 6) triggerAnnouncer('SUPER SMASH!!', '#f6d365');
+          if (comboCountRef.current === 10) triggerAnnouncer('UNSTOPPABLE RALLY!!', '#ff5533');
+          if (comboCountRef.current === 15) triggerAnnouncer('HOLY SMASH LEGEND!!', '#ff33cc');
 
           setStats((s) => ({
             ...s,
             leftHitCount: s.leftHitCount + 1,
             maxBallSpeed: Math.max(s.maxBallSpeed, newSpeed),
+            maxCombo: Math.max(s.maxCombo, comboCountRef.current),
           }));
         }
 
         if (rightHit && ball.vx > 0) {
+          comboCountRef.current += 1;
+          setComboCount(comboCountRef.current);
+
+          // Charge Right Rage +20%
+          right.rage = Math.min(100, right.rage + 20);
+          setRightRage(right.rage);
+
           const impact = (ball.y - (right.y + right.height / 2)) / (right.height / 2);
           const angle = impact * MAX_BOUNCE_ANGLE;
           const currentSpeed = Math.hypot(ball.vx, ball.vy);
@@ -815,18 +1043,25 @@ function App() {
           ball.vy = Math.sin(angle) * newSpeed;
           ball.x = rightPaddleX - ball.radius - 2;
 
-          soundFx.playHit(ball.isFireball);
-          spawnParticles(ball.x, ball.y, '#f6d365', 10);
-          triggerCameraShake(ball.isFireball ? 9 : 4);
+          soundFx.playHit(ball.isFireball, comboCountRef.current);
+          spawnParticles(ball.x, ball.y, '#f6d365', 12);
+          spawnShockwave(ball.x, ball.y, '#f6d365');
+          triggerCameraShake(ball.isFireball ? 10 : 5);
+
+          if (comboCountRef.current === 3) triggerAnnouncer('GREAT RETURN!', '#7be3ff');
+          if (comboCountRef.current === 6) triggerAnnouncer('SUPER SMASH!!', '#f6d365');
+          if (comboCountRef.current === 10) triggerAnnouncer('UNSTOPPABLE RALLY!!', '#ff5533');
+          if (comboCountRef.current === 15) triggerAnnouncer('HOLY SMASH LEGEND!!', '#ff33cc');
 
           setStats((s) => ({
             ...s,
             rightHitCount: s.rightHitCount + 1,
             maxBallSpeed: Math.max(s.maxBallSpeed, newSpeed),
+            maxCombo: Math.max(s.maxCombo, comboCountRef.current),
           }));
         }
 
-        // Shield hit or Goal check
+        // Goal check
         if (ball.x < -20) {
           if (left.shieldActive) {
             left.shieldActive = false;
@@ -838,8 +1073,10 @@ function App() {
             right.score += 1;
             setScores({ left: left.score, right: right.score });
             soundFx.playScore();
-            triggerCameraShake(14);
-            spawnParticles(ball.x, ball.y, '#f6d365', 30);
+            triggerCameraShake(16);
+            triggerHitstop(30);
+            spawnParticles(ball.x, ball.y, '#f6d365', 35);
+            spawnShockwave(ball.x, ball.y, '#f6d365');
 
             if (right.score >= WIN_SCORE) {
               setMatchWinner(rightName);
@@ -861,8 +1098,10 @@ function App() {
             left.score += 1;
             setScores({ left: left.score, right: right.score });
             soundFx.playScore();
-            triggerCameraShake(14);
-            spawnParticles(ball.x, ball.y, '#7be3ff', 30);
+            triggerCameraShake(16);
+            triggerHitstop(30);
+            spawnParticles(ball.x, ball.y, '#7be3ff', 35);
+            spawnShockwave(ball.x, ball.y, '#7be3ff');
 
             if (left.score >= WIN_SCORE) {
               setMatchWinner(leftName);
@@ -873,7 +1112,6 @@ function App() {
           }
         }
 
-        // Host sends online state update to Client
         if (gameMode === 'online' && multiplayerManager.isHost && multiplayerManager.isConnected) {
           multiplayerManager.sendMessage({
             type: 'STATE_UPDATE',
@@ -882,6 +1120,7 @@ function App() {
               left: leftRef.current,
               right: rightRef.current,
               scores: { left: left.score, right: right.score },
+              comboCount: comboCountRef.current,
               powerups: powerUpsRef.current,
               matchWinner: winnerRef.current ? (left.score >= WIN_SCORE ? leftName : rightName) : null,
               matchWinnerAvatar: winnerRef.current ? (left.score >= WIN_SCORE ? leftAvatar : rightAvatar) : '',
@@ -951,13 +1190,18 @@ function App() {
                 🌐 Online Live {isOnlineConnected ? '(Terhubung)' : '(Menunggu)'}
               </span>
             )}
+            {comboCount >= 3 && (
+              <span className="mode-badge combo-pulse">
+                ⚡ {comboCount}x RALLIES!
+              </span>
+            )}
           </div>
 
           <p className="intro">
             {gameMode === 'vs-ai'
-              ? 'Lawan AI Bot canggih! Gunakan W / S untuk menggerakkan raket.'
+              ? 'Lawan AI Bot canggih! Gunakan W/S untuk raket, tekan E untuk ULTIMATE METEOR SMASH saat bar 100%!'
               : gameMode === 'local'
-              ? 'Pemain Kiri: W / S. Pemain Kanan: Up / Down. Raih 5 poin duluan untuk Menang!'
+              ? 'Pemain Kiri (W/S | E), Pemain Kanan (Up/Down | Enter). Isi Bar Ultimate lalu keluarkan Smash mematikan!'
               : 'Main online P2P real-time! Bagikan link room ke lawanmu.'}
           </p>
         </div>
@@ -979,6 +1223,16 @@ function App() {
               </div>
               <div className="player-meta">
                 <span className="player-name">{leftName}</span>
+                {/* Ultimate Meter */}
+                <div className="rage-bar-wrapper">
+                  <div
+                    className={`rage-bar-fill ${leftRage >= 100 ? 'full-glow' : ''}`}
+                    style={{ width: `${leftRage}%` }}
+                  />
+                  <span className="rage-bar-label">
+                    {leftRage >= 100 ? '⚡ ULTIMATE READY (Tekan E)' : `Rage ${leftRage}%`}
+                  </span>
+                </div>
               </div>
             </div>
             <strong className="score-num">{scores.left}</strong>
@@ -1002,6 +1256,16 @@ function App() {
               <div className="player-meta">
                 <span className="player-name">{rightName}</span>
                 {gameMode === 'vs-ai' && <span className="ai-tag">Bot AI</span>}
+                {/* Ultimate Meter */}
+                <div className="rage-bar-wrapper">
+                  <div
+                    className={`rage-bar-fill ${rightRage >= 100 ? 'full-glow' : ''}`}
+                    style={{ width: `${rightRage}%` }}
+                  />
+                  <span className="rage-bar-label">
+                    {rightRage >= 100 ? '⚡ ULTIMATE READY (Tekan Enter)' : `Rage ${rightRage}%`}
+                  </span>
+                </div>
               </div>
             </div>
             <strong className="score-num">{scores.right}</strong>
@@ -1048,6 +1312,28 @@ function App() {
               'Pause'
             )}
           </button>
+
+          {/* Ultimate Skill Trigger Buttons */}
+          <button
+            type="button"
+            className={`ultimate-btn ${leftRage >= 100 ? 'ready' : 'disabled'}`}
+            onClick={() => triggerUltimateSkill('left')}
+            disabled={leftRage < 100}
+          >
+            <Flame size={18} /> ULTIMATE KIRI (E)
+          </button>
+
+          {gameMode === 'local' && (
+            <button
+              type="button"
+              className={`ultimate-btn ${rightRage >= 100 ? 'ready' : 'disabled'}`}
+              onClick={() => triggerUltimateSkill('right')}
+              disabled={rightRage < 100}
+            >
+              <Flame size={18} /> ULTIMATE KANAN (Enter)
+            </button>
+          )}
+
           <button type="button" className="secondary-btn" onClick={resetMatch}>
             Reset Skor
           </button>
@@ -1083,9 +1369,9 @@ function App() {
       {/* Powerups Legend / Instructions */}
       <section className="guide-grid">
         <div className="guide-card">
-          <h2><Zap size={18} className="icon-yellow" /> Power-Ups Unik</h2>
+          <h2><Zap size={18} className="icon-yellow" /> Power-Ups & Ultimate Rage</h2>
           <p>
-            Orb mystery muncul di lapangan: 🔥 Fireball, ⚡ Speed Boost, ❄️ Ice Freeze, 🛡️ Shield, 🏓 Mega Paddle!
+            Tiap pukulan mengisi <strong>+20% Bar Ultimate</strong>. Saat 100%, tekan tombol <strong>E / Enter</strong> untuk meluncurkan <strong>Meteor Smash!!</strong>
           </p>
         </div>
         <div className="guide-card">

@@ -63,21 +63,16 @@ class SoundSystem {
 
     const now = this.ctx.currentTime;
 
-    // Synthwave Bassline Sequence (A Minor -> F Major -> C Major -> G Major)
+    // Synthwave Bassline Sequence
     const bassNotes = [
-      // Bar 1: Am (110 Hz = A2)
       110, 110, 220, 110, 110, 220, 110, 165,
-      // Bar 2: F (87.31 Hz = F2)
       87.31, 87.31, 174.61, 87.31, 87.31, 174.61, 87.31, 130.81,
-      // Bar 3: C (130.81 Hz = C3)
       130.81, 130.81, 261.63, 130.81, 130.81, 261.63, 130.81, 196,
-      // Bar 4: G (98 Hz = G2)
       98, 98, 196, 98, 98, 196, 98, 146.83,
     ];
 
     const currentBassFreq = bassNotes[step];
 
-    // Play Bass Note
     try {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
@@ -94,15 +89,15 @@ class SoundSystem {
       osc.start(now);
       osc.stop(now + 0.1);
     } catch (e) {
-      // Ignore audio glitches
+      // Ignore
     }
 
-    // Melodic Synth Arpeggio on specific steps
+    // Melodic Synth Arpeggio
     const synthNotes = [
-      440, 523.25, 659.25, 880, // Am
-      349.23, 440, 523.25, 698.46, // F
-      261.63, 329.63, 392, 523.25, // C
-      392, 493.88, 587.33, 783.99, // G
+      440, 523.25, 659.25, 880,
+      349.23, 440, 523.25, 698.46,
+      261.63, 329.63, 392, 523.25,
+      392, 493.88, 587.33, 783.99,
     ];
 
     if (step % 2 === 0) {
@@ -126,12 +121,12 @@ class SoundSystem {
         osc.start(now);
         osc.stop(now + 0.15);
       } catch (e) {
-        // Ignore audio glitches
+        // Ignore
       }
     }
   }
 
-  public playHit(isFireball: boolean = false) {
+  public playHit(isFireball: boolean = false, comboCount: number = 0) {
     if (!this.soundEnabled) return;
     this.initCtx();
     if (!this.ctx) return;
@@ -141,20 +136,63 @@ class SoundSystem {
       const gain = this.ctx.createGain();
 
       osc.type = isFireball ? 'sawtooth' : 'triangle';
-      const freq = isFireball ? 520 : 380 + Math.random() * 40;
-      osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(freq * 1.5, this.ctx.currentTime + 0.08);
+      // Pitch rises dynamically as combo/rally increases!
+      const baseFreq = isFireball ? 520 : 380 + Math.min(600, comboCount * 25);
+      osc.frequency.setValueAtTime(baseFreq, this.ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, this.ctx.currentTime + 0.09);
 
-      gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.35, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.11);
 
       osc.connect(gain);
       gain.connect(this.ctx.destination);
 
       osc.start();
-      osc.stop(this.ctx.currentTime + 0.1);
+      osc.stop(this.ctx.currentTime + 0.11);
     } catch (e) {
       console.warn('Audio play hit error', e);
+    }
+  }
+
+  public playUltimateSmash() {
+    if (!this.soundEnabled) return;
+    this.initCtx();
+    if (!this.ctx) return;
+
+    try {
+      const now = this.ctx.currentTime;
+      // Deep sub-bass drop + high synth beam
+      const osc1 = this.ctx.createOscillator();
+      const osc2 = this.ctx.createOscillator();
+      const gain1 = this.ctx.createGain();
+      const gain2 = this.ctx.createGain();
+
+      osc1.type = 'sawtooth';
+      osc1.frequency.setValueAtTime(150, now);
+      osc1.frequency.exponentialRampToValueAtTime(30, now + 0.4);
+
+      gain1.gain.setValueAtTime(0.5, now);
+      gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+
+      osc2.type = 'square';
+      osc2.frequency.setValueAtTime(880, now);
+      osc2.frequency.exponentialRampToValueAtTime(1760, now + 0.25);
+
+      gain2.gain.setValueAtTime(0.3, now);
+      gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+
+      osc1.connect(gain1);
+      gain1.connect(this.ctx.destination);
+
+      osc2.connect(gain2);
+      gain2.connect(this.ctx.destination);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + 0.4);
+      osc2.stop(now + 0.25);
+    } catch (e) {
+      console.warn('Audio ultimate error', e);
     }
   }
 
@@ -168,7 +206,7 @@ class SoundSystem {
       const gain = this.ctx.createGain();
 
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(220, this.ctx.currentTime);
+      osc.frequency.setValueAtTime(240, this.ctx.currentTime);
       osc.frequency.exponentialRampToValueAtTime(120, this.ctx.currentTime + 0.06);
 
       gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
@@ -223,10 +261,10 @@ class SoundSystem {
       const gain = this.ctx.createGain();
 
       osc.type = 'square';
-      osc.frequency.setValueAtTime(293.66, this.ctx.currentTime); // D4
-      osc.frequency.setValueAtTime(440, this.ctx.currentTime + 0.12); // A4
+      osc.frequency.setValueAtTime(293.66, this.ctx.currentTime);
+      osc.frequency.setValueAtTime(440, this.ctx.currentTime + 0.12);
 
-      gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+      gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.35);
 
       osc.connect(gain);
@@ -245,7 +283,7 @@ class SoundSystem {
     if (!this.ctx) return;
 
     try {
-      const fanfare = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+      const fanfare = [523.25, 659.25, 783.99, 1046.5];
       fanfare.forEach((freq, i) => {
         if (!this.ctx) return;
         const osc = this.ctx.createOscillator();

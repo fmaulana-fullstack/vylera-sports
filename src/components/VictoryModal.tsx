@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import type { MatchStats } from '../types/game';
-import { Trophy, RotateCcw, Zap, Target, Flame } from 'lucide-react';
+import { Trophy, RotateCcw, Zap, Flame, Sparkles } from 'lucide-react';
 
 interface Props {
   winnerName: string;
@@ -25,15 +25,15 @@ export const VictoryModal: React.FC<Props> = ({
 
     const frame = () => {
       confetti({
-        particleCount: 4,
+        particleCount: 5,
         angle: 60,
-        spread: 55,
+        spread: 60,
         origin: { x: 0, y: 0.7 },
       });
       confetti({
-        particleCount: 4,
+        particleCount: 5,
         angle: 120,
-        spread: 55,
+        spread: 60,
         origin: { x: 1, y: 0.7 },
       });
 
@@ -66,30 +66,30 @@ export const VictoryModal: React.FC<Props> = ({
             <Zap size={18} className="stat-icon yellow" />
             <div>
               <span className="stat-value">{stats.maxBallSpeed.toFixed(1)} km/h</span>
-              <span className="stat-label">Kecepatan Maks Ball</span>
+              <span className="stat-label">Kecepatan Maks</span>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <Sparkles size={18} className="stat-icon blue" />
+            <div>
+              <span className="stat-value">{stats.maxCombo}x</span>
+              <span className="stat-label">Max Rally Combo</span>
             </div>
           </div>
 
           <div className="stat-card">
             <Flame size={18} className="stat-icon red" />
             <div>
-              <span className="stat-value">{stats.powerupsCollected}</span>
-              <span className="stat-label">Power-up Diambil</span>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <Target size={18} className="stat-icon blue" />
-            <div>
-              <span className="stat-value">{stats.leftHitCount + stats.rightHitCount}</span>
-              <span className="stat-label">Pukulan Total</span>
+              <span className="stat-value">{stats.ultimatesUsed}</span>
+              <span className="stat-label">Meteor Smash</span>
             </div>
           </div>
         </div>
 
         <div className="victory-actions">
           <button onClick={onRematch} className="primary-btn glow-btn rematch-btn">
-            <RotateCcw size={20} /> Main Lagi (Rematch)
+            <RotateCcw size={20} /> TANDING LAGI (REMATCH)
           </button>
         </div>
       </div>
