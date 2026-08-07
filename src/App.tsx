@@ -557,10 +557,32 @@ function App() {
         context.fillStyle = 'rgba(255, 255, 255, 0.12)';
         context.fill();
 
-        if (img && img.complete && img.naturalWidth > 0) {
+        if (img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
           context.clip();
+
+          // Object-fit: cover cropping math to ensure image aspect ratio is never distorted (gepeng)
+          const imgAspect = img.naturalWidth / img.naturalHeight;
+          const boxAspect = targetWidth / targetHeight;
+
+          let sx = 0;
+          let sy = 0;
+          let sWidth = img.naturalWidth;
+          let sHeight = img.naturalHeight;
+
+          if (imgAspect > boxAspect) {
+            sWidth = img.naturalHeight * boxAspect;
+            sx = (img.naturalWidth - sWidth) / 2;
+          } else {
+            sHeight = img.naturalWidth / boxAspect;
+            sy = (img.naturalHeight - sHeight) / 2;
+          }
+
           context.drawImage(
             img,
+            sx,
+            sy,
+            sWidth,
+            sHeight,
             cx - targetWidth / 2,
             cy - targetHeight / 2,
             targetWidth,

@@ -152,10 +152,12 @@ body {
 }
 
 .nav-user-avatar {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
   object-fit: cover;
+  flex-shrink: 0;
 }
 
 .nav-user-name {
@@ -249,8 +251,15 @@ body {
   align-items: center;
 }
 
+.player-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .avatar-wrapper {
   position: relative;
+  flex-shrink: 0;
 }
 
 .avatar-wrapper.clickable {
@@ -258,10 +267,12 @@ body {
 }
 
 .player-avatar {
-  width: 54px;
-  height: 54px;
+  width: 56px;
+  height: 56px;
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
   object-fit: cover;
+  flex-shrink: 0;
   border: 2px solid var(--accent-cyan);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
   transition: transform 0.2s ease;
@@ -625,10 +636,12 @@ body {
 }
 
 .avatar-option-img {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
   object-fit: cover;
+  flex-shrink: 0;
 }
 
 .avatar-option span {
@@ -681,7 +694,10 @@ body {
 .user-avatar-tiny {
   width: 36px;
   height: 36px;
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
 }
 
 .google-tag {
@@ -763,6 +779,9 @@ body {
   cursor: pointer;
   position: relative;
   transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .avatar-card:hover {
@@ -778,8 +797,10 @@ body {
 .avatar-img {
   width: 56px;
   height: 56px;
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
   object-fit: cover;
+  flex-shrink: 0;
   margin-bottom: 6px;
 }
 
@@ -809,6 +830,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  align-items: center;
 }
 
 .victory-title {
@@ -823,8 +845,10 @@ body {
 .winner-avatar {
   width: 80px;
   height: 80px;
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
   object-fit: cover;
+  flex-shrink: 0;
   border: 3px solid var(--accent-yellow);
   box-shadow: 0 10px 25px rgba(246, 211, 101, 0.4);
 }
@@ -836,6 +860,7 @@ body {
   background: rgba(0, 0, 0, 0.3);
   padding: 14px;
   border-radius: 16px;
+  width: 100%;
 }
 
 .stat-card {
