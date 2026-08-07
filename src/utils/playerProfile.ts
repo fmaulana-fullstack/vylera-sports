@@ -5,10 +5,10 @@ const STORAGE_KEY = 'vylera_player_profile';
 export const PRESET_AVATARS = [
   { id: 'av-1', name: 'Mba Aytakin', url: new URL('../assets/mba aytakin .png', import.meta.url).href },
   { id: 'av-2', name: 'Pak Putra', url: new URL('../assets/pak putra .png', import.meta.url).href },
-  { id: 'av-3', name: 'Cyber Ace', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=CyberAce' },
-  { id: 'av-4', name: 'Neon Champ', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=NeonChamp' },
-  { id: 'av-5', name: 'Tennis Queen', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=TennisQueen' },
-  { id: 'av-6', name: 'Smash Master', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=SmashMaster' },
+  { id: 'av-3', name: 'Pak Mechev', url: new URL('../assets/pak mechev.png', import.meta.url).href },
+  { id: 'av-4', name: 'Cyber Ace', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=CyberAce' },
+  { id: 'av-5', name: 'Neon Champ', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=NeonChamp' },
+  { id: 'av-6', name: 'Tennis Queen', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=TennisQueen' },
 ];
 
 export const COOL_NAME_PREFIXES = ['Cyber', 'Neon', 'Pro', 'Super', 'Hyper', 'Master', 'Ace', 'Vylera'];

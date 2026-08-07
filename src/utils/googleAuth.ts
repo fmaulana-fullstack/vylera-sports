@@ -7,6 +7,7 @@ const CLIENT_ID_KEY = 'vylera_google_client_id';
 export const PRESET_AVATARS = [
   { id: 'google-user-1', name: 'Mba Aytakin', url: new URL('../assets/mba aytakin .png', import.meta.url).href },
   { id: 'google-user-2', name: 'Pak Putra', url: new URL('../assets/pak putra .png', import.meta.url).href },
+  { id: 'google-user-3', name: 'Pak Mechev', url: new URL('../assets/pak mechev.png', import.meta.url).href },
   { id: 'cyber-pro', name: 'Cyber Ace', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80' },
   { id: 'neon-champ', name: 'Neon Champ', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80' },
   { id: 'tennis-star', name: 'Tennis Queen', url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80' },
