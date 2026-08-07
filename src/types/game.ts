@@ -1,3 +1,5 @@
+export type SportType = 'tennis' | 'pingpong' | 'airhockey' | 'soccer' | 'basketball' | 'bowling';
+
 export type GameMode = 'vs-ai' | 'local' | 'online';
 
 export type AIDifficulty = 'easy' | 'medium' | 'hard';
@@ -43,9 +45,11 @@ export interface BallState {
 }
 
 export interface PaddleState {
+  x?: number;
   y: number;
   score: number;
   height: number;
+  width?: number;
   speed: number;
   rage: number; // 0 - 100%
   isFrozen?: boolean;
@@ -93,6 +97,6 @@ export interface MatchStats {
 }
 
 export interface PeerMessage {
-  type: 'INIT_STATE' | 'STATE_UPDATE' | 'PLAYER_ACTION' | 'REMATCH' | 'PING' | 'PADDLE_MOVE' | 'TRIGGER_ULTIMATE';
+  type: 'INIT_STATE' | 'STATE_UPDATE' | 'PLAYER_ACTION' | 'REMATCH' | 'PING' | 'PADDLE_MOVE' | 'TRIGGER_ULTIMATE' | 'CHANGE_SPORT';
   payload: any;
 }

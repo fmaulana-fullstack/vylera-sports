@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import './App.css';
 import { Navbar } from './components/Navbar';
+import { SportSelector } from './components/SportSelector';
+import { VyleraFooter } from './components/VyleraFooter';
 import { PlayerProfileModal } from './components/PlayerProfileModal';
 import { CharacterSelectModal } from './components/CharacterSelectModal';
 import { OnlineLobbyModal } from './components/OnlineLobbyModal';
@@ -20,6 +22,7 @@ import type {
   PowerUpItem,
   PowerUpType,
   Shockwave,
+  SportType,
 } from './types/game';
 import { soundFx } from './utils/audio';
 import { getStoredUser, PRESET_AVATARS } from './utils/playerProfile';
@@ -44,12 +47,12 @@ const POWERUP_TYPES: PowerUpType[] = ['fireball', 'speed', 'freeze', 'shield', '
 const clamp = (val: number, min: number, max: number) =>
   Math.min(max, Math.max(min, val));
 
-const freshBall = (direction: number = 1): BallState => ({
+const freshBall = (direction: number = 1, sport: SportType = 'tennis'): BallState => ({
   x: FIELD_WIDTH / 2,
-  y: FIELD_HEIGHT / 2,
-  vx: INITIAL_BALL_SPEED * direction,
+  y: sport === 'soccer' || sport === 'basketball' ? FIELD_HEIGHT / 2 - 100 : FIELD_HEIGHT / 2,
+  vx: (sport === 'pingpong' ? 8.5 : sport === 'bowling' ? 5.0 : INITIAL_BALL_SPEED) * direction,
   vy: (Math.random() * 4 - 2) || 1.5,
-  radius: BALL_RADIUS,
+  radius: sport === 'pingpong' ? 8 : sport === 'airhockey' ? 14 : sport === 'soccer' ? 16 : sport === 'basketball' ? 18 : sport === 'bowling' ? 16 : BALL_RADIUS,
   speed: INITIAL_BALL_SPEED,
   isFireball: false,
   isUltimate: false,
@@ -65,7 +68,10 @@ function App() {
   const winnerRef = useRef<string | null>(null);
   const activePointersRef = useRef<Record<number, 'left' | 'right'>>({});
 
-  // Game state
+  // Game Multi-Sport Hub State
+  const [sportType, setSportType] = useState<SportType>('tennis');
+  const sportTypeRef = useRef<SportType>('tennis');
+
   const [gameMode, setGameMode] = useState<GameMode>('vs-ai');
   const [aiDifficulty, setAIDifficulty] = useState<AIDifficulty>('medium');
   const [currentUser, setCurrentUser] = useState<PlayerProfile | null>(getStoredUser());
@@ -100,8 +106,9 @@ function App() {
   const [rightRage, setRightRage] = useState<number>(0);
 
   // Physics refs
-  const ballRef = useRef<BallState>(freshBall(1));
+  const ballRef = useRef<BallState>(freshBall(1, 'tennis'));
   const leftRef = useRef<PaddleState>({
+    x: 40,
     y: FIELD_HEIGHT / 2 - BASE_PADDLE_HEIGHT / 2,
     score: 0,
     height: BASE_PADDLE_HEIGHT,
@@ -109,6 +116,7 @@ function App() {
     rage: 0,
   });
   const rightRef = useRef<PaddleState>({
+    x: FIELD_WIDTH - 40 - PADDLE_WIDTH,
     y: FIELD_HEIGHT / 2 - BASE_PADDLE_HEIGHT / 2,
     score: 0,
     height: BASE_PADDLE_HEIGHT,
@@ -123,7 +131,7 @@ function App() {
   const announcerRef = useRef<AnnouncerBanner | null>(null);
   const lastPowerUpSpawnRef = useRef<number>(Date.now());
   const cameraShakeRef = useRef<number>(0);
-  const hitstopRef = useRef<number>(0); // Hitstop freeze frame
+  const hitstopRef = useRef<number>(0);
 
   // Match statistics
   const [stats, setStats] = useState<MatchStats>({
@@ -151,12 +159,15 @@ function App() {
   const leftImgElemRef = useRef<HTMLImageElement | null>(null);
   const rightImgElemRef = useRef<HTMLImageElement | null>(null);
 
-  // Keep soundFx updated
+  useEffect(() => {
+    sportTypeRef.current = sportType;
+    resetMatch();
+  }, [sportType]);
+
   useEffect(() => {
     soundFx.soundEnabled = soundEnabled;
   }, [soundEnabled]);
 
-  // Sync user profile changes
   useEffect(() => {
     if (currentUser) {
       setLeftAvatar(currentUser.avatar);
@@ -164,7 +175,6 @@ function App() {
     }
   }, [currentUser]);
 
-  // Auto detect room URL param on load
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const roomParam = params.get('room');
@@ -176,7 +186,6 @@ function App() {
     }
   }, []);
 
-  // Update image elements
   useEffect(() => {
     const imgL = new Image();
     imgL.crossOrigin = 'anonymous';
@@ -298,34 +307,46 @@ function App() {
   };
 
   const resetRound = (direction: number = 1) => {
-    ballRef.current = freshBall(direction);
+    const currentSport = sportTypeRef.current;
+    ballRef.current = freshBall(direction, currentSport);
     powerUpsRef.current = [];
     comboCountRef.current = 0;
     setComboCount(0);
 
-    leftRef.current.height = BASE_PADDLE_HEIGHT;
+    const targetHeight = currentSport === 'pingpong' ? 80 : currentSport === 'soccer' ? 70 : currentSport === 'basketball' ? 90 : currentSport === 'bowling' ? 100 : BASE_PADDLE_HEIGHT;
+
+    leftRef.current.height = targetHeight;
     leftRef.current.speed = BASE_PADDLE_SPEED;
     leftRef.current.isFrozen = false;
+    leftRef.current.y = FIELD_HEIGHT / 2 - targetHeight / 2;
+    leftRef.current.x = 40;
 
-    rightRef.current.height = BASE_PADDLE_HEIGHT;
+    rightRef.current.height = targetHeight;
     rightRef.current.speed = BASE_PADDLE_SPEED;
     rightRef.current.isFrozen = false;
+    rightRef.current.y = FIELD_HEIGHT / 2 - targetHeight / 2;
+    rightRef.current.x = FIELD_WIDTH - 40 - PADDLE_WIDTH;
 
     setIsPaused(true);
   };
 
   const resetMatch = () => {
+    const currentSport = sportTypeRef.current;
+    const targetHeight = currentSport === 'pingpong' ? 80 : currentSport === 'soccer' ? 70 : currentSport === 'basketball' ? 90 : currentSport === 'bowling' ? 100 : BASE_PADDLE_HEIGHT;
+
     leftRef.current = {
-      y: FIELD_HEIGHT / 2 - BASE_PADDLE_HEIGHT / 2,
+      x: 40,
+      y: FIELD_HEIGHT / 2 - targetHeight / 2,
       score: 0,
-      height: BASE_PADDLE_HEIGHT,
+      height: targetHeight,
       speed: BASE_PADDLE_SPEED,
       rage: 0,
     };
     rightRef.current = {
-      y: FIELD_HEIGHT / 2 - BASE_PADDLE_HEIGHT / 2,
+      x: FIELD_WIDTH - 40 - PADDLE_WIDTH,
+      y: FIELD_HEIGHT / 2 - targetHeight / 2,
       score: 0,
-      height: BASE_PADDLE_HEIGHT,
+      height: targetHeight,
       speed: BASE_PADDLE_SPEED,
       rage: 0,
     };
@@ -356,7 +377,8 @@ function App() {
 
     if (pausedRef.current) {
       const direction = ballRef.current.vx >= 0 ? 1 : -1;
-      ballRef.current.vx = INITIAL_BALL_SPEED * direction;
+      const currentSport = sportTypeRef.current;
+      ballRef.current.vx = (currentSport === 'pingpong' ? 8.5 : currentSport === 'bowling' ? 5.0 : INITIAL_BALL_SPEED) * direction;
       ballRef.current.vy = (Math.random() * 4 - 2) || 1.2;
       setIsPaused(false);
       soundFx.playHit();
@@ -395,9 +417,13 @@ function App() {
     if (msg.type === 'PADDLE_MOVE') {
       if (multiplayerManager.isHost) {
         rightRef.current.y = msg.payload.y;
+        if (msg.payload.x) rightRef.current.x = msg.payload.x;
       } else {
         leftRef.current.y = msg.payload.y;
+        if (msg.payload.x) leftRef.current.x = msg.payload.x;
       }
+    } else if (msg.type === 'CHANGE_SPORT') {
+      setSportType(msg.payload.sport);
     } else if (msg.type === 'TRIGGER_ULTIMATE') {
       triggerUltimateSkill(msg.payload.side);
     } else if (msg.type === 'STATE_UPDATE' && !multiplayerManager.isHost) {
@@ -432,7 +458,7 @@ function App() {
     };
   };
 
-  const movePaddleTo = (side: 'left' | 'right', y: number) => {
+  const movePaddleTo = (side: 'left' | 'right', y: number, x?: number) => {
     const targetPaddle = side === 'left' ? leftRef.current : rightRef.current;
     const nextY = clamp(
       y - targetPaddle.height / 2,
@@ -442,8 +468,14 @@ function App() {
 
     if (side === 'left') {
       leftRef.current.y = nextY;
+      if (x !== undefined && sportType === 'airhockey') {
+        leftRef.current.x = clamp(x - PADDLE_WIDTH / 2, 24, FIELD_WIDTH / 2 - 40);
+      }
     } else {
       rightRef.current.y = nextY;
+      if (x !== undefined && sportType === 'airhockey') {
+        rightRef.current.x = clamp(x - PADDLE_WIDTH / 2, FIELD_WIDTH / 2 + 20, FIELD_WIDTH - 24 - PADDLE_WIDTH);
+      }
     }
 
     if (gameMode === 'online') {
@@ -453,7 +485,7 @@ function App() {
       if (isMySide) {
         multiplayerManager.sendMessage({
           type: 'PADDLE_MOVE',
-          payload: { y: nextY },
+          payload: { y: nextY, x: targetPaddle.x },
         });
       }
     }
@@ -464,7 +496,7 @@ function App() {
     if (!point) return;
     const side = point.x < FIELD_WIDTH / 2 ? 'left' : 'right';
     activePointersRef.current[event.pointerId] = side;
-    movePaddleTo(side, point.y);
+    movePaddleTo(side, point.y, point.x);
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
@@ -473,14 +505,13 @@ function App() {
     if (!side) return;
     const point = getCanvasPoint(event);
     if (!point) return;
-    movePaddleTo(side, point.y);
+    movePaddleTo(side, point.y, point.x);
   };
 
   const handlePointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     delete activePointersRef.current[event.pointerId];
   };
 
-  // Keyboard controls listener
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       keysRef.current[e.key.toLowerCase()] = true;
@@ -490,7 +521,6 @@ function App() {
         serveBall();
       }
 
-      // Ultimate Skill Keys: 'E' for Left, 'Enter' for Right
       if (e.key.toLowerCase() === 'e') {
         triggerUltimateSkill('left');
       }
@@ -517,7 +547,7 @@ function App() {
     };
   }, []);
 
-  // Main Canvas Graphics & Juice Loop
+  // Main Canvas Graphics & Game Physics Loop for all 6 sports
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -539,7 +569,6 @@ function App() {
     const drawArena = () => {
       context.save();
 
-      // Camera Shake translate
       if (cameraShakeRef.current > 0) {
         const shakeX = (Math.random() - 0.5) * cameraShakeRef.current;
         const shakeY = (Math.random() - 0.5) * cameraShakeRef.current;
@@ -550,38 +579,132 @@ function App() {
 
       context.clearRect(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
 
-      // Cyber Court Background
-      const bgGrad = context.createLinearGradient(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
-      bgGrad.addColorStop(0, '#060d19');
-      bgGrad.addColorStop(0.5, '#0c1a2e');
-      bgGrad.addColorStop(1, '#081222');
-      context.fillStyle = bgGrad;
-      context.fillRect(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
+      const currentSport = sportTypeRef.current;
 
-      // Cyber Grid Lines (Pulsing to rhythm)
-      const pulseOpacity = 0.03 + Math.sin(Date.now() / 250) * 0.02;
-      context.strokeStyle = `rgba(123, 227, 255, ${pulseOpacity})`;
-      context.lineWidth = 1;
-      for (let x = 0; x < FIELD_WIDTH; x += 40) {
+      // Render Background Court for each of 6 sports
+      if (currentSport === 'tennis') {
+        const bgGrad = context.createLinearGradient(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
+        bgGrad.addColorStop(0, '#060d19');
+        bgGrad.addColorStop(0.5, '#0c1a2e');
+        bgGrad.addColorStop(1, '#081222');
+        context.fillStyle = bgGrad;
+        context.fillRect(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
+
+        const pulseOpacity = 0.03 + Math.sin(Date.now() / 250) * 0.02;
+        context.strokeStyle = `rgba(123, 227, 255, ${pulseOpacity})`;
+        context.lineWidth = 1;
+        for (let x = 0; x < FIELD_WIDTH; x += 40) {
+          context.beginPath();
+          context.moveTo(x, 0);
+          context.lineTo(x, FIELD_HEIGHT);
+          context.stroke();
+        }
+
+        context.strokeStyle = 'rgba(123, 227, 255, 0.3)';
+        context.lineWidth = 4;
+        context.strokeRect(20, 20, FIELD_WIDTH - 40, FIELD_HEIGHT - 40);
+
+        context.setLineDash([14, 12]);
         context.beginPath();
-        context.moveTo(x, 0);
-        context.lineTo(x, FIELD_HEIGHT);
+        context.moveTo(FIELD_WIDTH / 2, 24);
+        context.lineTo(FIELD_WIDTH / 2, FIELD_HEIGHT - 24);
+        context.strokeStyle = 'rgba(246, 211, 101, 0.4)';
         context.stroke();
+        context.setLineDash([]);
+      } else if (currentSport === 'pingpong') {
+        context.fillStyle = '#0a2342';
+        context.fillRect(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
+
+        context.strokeStyle = '#ffffff';
+        context.lineWidth = 8;
+        context.strokeRect(20, 20, FIELD_WIDTH - 40, FIELD_HEIGHT - 40);
+
+        context.beginPath();
+        context.moveTo(20, FIELD_HEIGHT / 2);
+        context.lineTo(FIELD_WIDTH - 20, FIELD_HEIGHT / 2);
+        context.strokeStyle = 'rgba(255,255,255,0.2)';
+        context.lineWidth = 2;
+        context.stroke();
+
+        context.beginPath();
+        context.moveTo(FIELD_WIDTH / 2, 10);
+        context.lineTo(FIELD_WIDTH / 2, FIELD_HEIGHT - 10);
+        context.strokeStyle = '#ffffff';
+        context.lineWidth = 6;
+        context.stroke();
+      } else if (currentSport === 'airhockey') {
+        context.fillStyle = '#040b14';
+        context.fillRect(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
+
+        context.strokeStyle = '#ff33cc';
+        context.lineWidth = 6;
+        context.strokeRect(20, 20, FIELD_WIDTH - 40, FIELD_HEIGHT - 40);
+
+        context.fillStyle = 'rgba(51, 255, 153, 0.2)';
+        context.fillRect(10, 160, 10, 240);
+        context.fillRect(FIELD_WIDTH - 20, 160, 10, 240);
+
+        context.beginPath();
+        context.arc(FIELD_WIDTH / 2, FIELD_HEIGHT / 2, 70, 0, Math.PI * 2);
+        context.strokeStyle = '#7be3ff';
+        context.lineWidth = 3;
+        context.stroke();
+
+        context.beginPath();
+        context.moveTo(FIELD_WIDTH / 2, 20);
+        context.lineTo(FIELD_WIDTH / 2, FIELD_HEIGHT - 20);
+        context.strokeStyle = '#ff5533';
+        context.lineWidth = 4;
+        context.stroke();
+      } else if (currentSport === 'soccer') {
+        context.fillStyle = '#0b2e13';
+        context.fillRect(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
+
+        context.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        context.lineWidth = 4;
+        context.strokeRect(20, 20, FIELD_WIDTH - 40, FIELD_HEIGHT - 40);
+
+        context.beginPath();
+        context.moveTo(FIELD_WIDTH / 2, 20);
+        context.lineTo(FIELD_WIDTH / 2, FIELD_HEIGHT - 20);
+        context.arc(FIELD_WIDTH / 2, FIELD_HEIGHT / 2, 80, 0, Math.PI * 2);
+        context.stroke();
+
+        context.fillStyle = 'rgba(246, 211, 101, 0.25)';
+        context.fillRect(10, 200, 12, 240);
+        context.fillRect(FIELD_WIDTH - 22, 200, 12, 240);
+      } else if (currentSport === 'basketball') {
+        // Quantum Basketball Hardwood Court
+        context.fillStyle = '#2d1406';
+        context.fillRect(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
+
+        context.strokeStyle = '#f6d365';
+        context.lineWidth = 4;
+        context.strokeRect(20, 20, FIELD_WIDTH - 40, FIELD_HEIGHT - 40);
+
+        // Center court key
+        context.beginPath();
+        context.arc(FIELD_WIDTH / 2, FIELD_HEIGHT / 2, 70, 0, Math.PI * 2);
+        context.stroke();
+
+        // Hoops on left and right walls (y: 180 to 280)
+        context.fillStyle = '#ff5533';
+        context.fillRect(10, 210, 20, 140);
+        context.fillRect(FIELD_WIDTH - 30, 210, 20, 140);
+      } else if (currentSport === 'bowling') {
+        // Cyber Bowling Alley
+        context.fillStyle = '#110a26';
+        context.fillRect(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
+
+        context.strokeStyle = '#a855f7';
+        context.lineWidth = 4;
+        context.strokeRect(20, 20, FIELD_WIDTH - 40, FIELD_HEIGHT - 40);
+
+        // Lane guides
+        context.strokeStyle = 'rgba(246, 211, 101, 0.15)';
+        context.lineWidth = 2;
+        context.strokeRect(40, 120, FIELD_WIDTH - 80, FIELD_HEIGHT - 240);
       }
-
-      // Court Borders & Glow Line
-      context.strokeStyle = 'rgba(123, 227, 255, 0.3)';
-      context.lineWidth = 4;
-      context.strokeRect(20, 20, FIELD_WIDTH - 40, FIELD_HEIGHT - 40);
-
-      // Center Net Line
-      context.setLineDash([14, 12]);
-      context.beginPath();
-      context.moveTo(FIELD_WIDTH / 2, 24);
-      context.lineTo(FIELD_WIDTH / 2, FIELD_HEIGHT - 24);
-      context.strokeStyle = 'rgba(246, 211, 101, 0.4)';
-      context.stroke();
-      context.setLineDash([]);
 
       const left = leftRef.current;
       const right = rightRef.current;
@@ -633,24 +756,6 @@ function App() {
         context.restore();
       });
 
-      // Draw Shields if active
-      if (left.shieldActive) {
-        context.strokeStyle = '#33ff99';
-        context.lineWidth = 6;
-        context.beginPath();
-        context.moveTo(10, 20);
-        context.lineTo(10, FIELD_HEIGHT - 20);
-        context.stroke();
-      }
-      if (right.shieldActive) {
-        context.strokeStyle = '#33ff99';
-        context.lineWidth = 6;
-        context.beginPath();
-        context.moveTo(FIELD_WIDTH - 10, 20);
-        context.lineTo(FIELD_WIDTH - 10, FIELD_HEIGHT - 20);
-        context.stroke();
-      }
-
       // Draw Paddle Avatar Function
       const drawPaddleAvatar = (
         img: HTMLImageElement | null,
@@ -658,14 +763,13 @@ function App() {
         paddle: PaddleState,
         isLeft: boolean
       ) => {
-        const cx = x + PADDLE_WIDTH / 2;
-        const cy = paddle.y + paddle.height / 2;
-        const targetHeight = paddle.height;
         const targetWidth = PADDLE_WIDTH + 14;
+        const targetHeight = paddle.height;
+        const cx = (paddle.x !== undefined ? paddle.x : x) + PADDLE_WIDTH / 2;
+        const cy = paddle.y + paddle.height / 2;
 
         context.save();
 
-        // Rage 100% Glowing Aura
         if (paddle.rage >= 100) {
           context.shadowColor = '#ff33cc';
           context.shadowBlur = 25;
@@ -688,7 +792,6 @@ function App() {
         if (img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
           context.clip();
 
-          // Object-fit cover cropping math
           const imgAspect = img.naturalWidth / img.naturalHeight;
           const boxAspect = targetWidth / targetHeight;
 
@@ -720,7 +823,6 @@ function App() {
 
         context.restore();
 
-        // Neon paddle border
         context.beginPath();
         context.lineWidth = 3;
         context.strokeStyle = isLeft ? '#7be3ff' : '#f6d365';
@@ -734,10 +836,10 @@ function App() {
         context.stroke();
       };
 
-      drawPaddleAvatar(leftImgElemRef.current, 40, left, true);
+      drawPaddleAvatar(leftImgElemRef.current, left.x || 40, left, true);
       drawPaddleAvatar(
         rightImgElemRef.current,
-        FIELD_WIDTH - 40 - PADDLE_WIDTH,
+        right.x || FIELD_WIDTH - 40 - PADDLE_WIDTH,
         right,
         false
       );
@@ -779,7 +881,7 @@ function App() {
         });
       }
 
-      // Draw Ball
+      // Draw Ball / Puck / Basketball / Bowling Ball
       context.save();
       if (ball.isUltimate) {
         context.shadowColor = '#ff33cc';
@@ -792,9 +894,9 @@ function App() {
         context.fillStyle = '#ff7733';
         spawnParticles(ball.x, ball.y, '#ff4400', 1);
       } else {
-        context.shadowColor = '#7be3ff';
+        context.shadowColor = currentSport === 'airhockey' ? '#ff33cc' : '#7be3ff';
         context.shadowBlur = 12;
-        context.fillStyle = '#ffffff';
+        context.fillStyle = currentSport === 'pingpong' ? '#ffffff' : currentSport === 'basketball' ? '#ff7733' : currentSport === 'bowling' ? '#a855f7' : '#ffffff';
       }
 
       context.beginPath();
@@ -852,7 +954,6 @@ function App() {
     };
 
     const step = (timestamp: number) => {
-      // Hitstop delay check
       if (Date.now() < hitstopRef.current) {
         requestRef.current = window.requestAnimationFrame(step);
         return;
@@ -866,6 +967,7 @@ function App() {
       const right = rightRef.current;
       const ball = ballRef.current;
       const keys = keysRef.current;
+      const currentSport = sportTypeRef.current;
 
       // Handle Paddle Movements
       if (!winnerRef.current) {
@@ -877,6 +979,10 @@ function App() {
         if (!left.isFrozen) {
           if (keys['w']) left.y -= left.speed * delta;
           if (keys['s']) left.y += left.speed * delta;
+          if (currentSport === 'airhockey') {
+            if (keys['a']) left.x = Math.max(24, (left.x || 40) - left.speed * delta);
+            if (keys['d']) left.x = Math.min(FIELD_WIDTH / 2 - 40, (left.x || 40) + left.speed * delta);
+          }
         }
 
         if (gameMode === 'vs-ai' && !pausedRef.current) {
@@ -888,13 +994,16 @@ function App() {
             delta
           );
 
-          // AI auto uses Ultimate when 100% full!
           if (right.rage >= 100 && Math.random() < 0.05) {
             triggerUltimateSkill('right');
           }
         } else if (gameMode === 'local' && !right.isFrozen) {
           if (keys['arrowup']) right.y -= right.speed * delta;
           if (keys['arrowdown']) right.y += right.speed * delta;
+          if (currentSport === 'airhockey') {
+            if (keys['arrowleft']) right.x = Math.max(FIELD_WIDTH / 2 + 20, (right.x || FIELD_WIDTH - 58) - right.speed * delta);
+            if (keys['arrowright']) right.x = Math.min(FIELD_WIDTH - 24 - PADDLE_WIDTH, (right.x || FIELD_WIDTH - 58) + right.speed * delta);
+          }
         }
       }
 
@@ -909,7 +1018,17 @@ function App() {
           lastPowerUpSpawnRef.current = Date.now();
         }
 
-        // Store Trail History
+        // Gravity physics for Head Soccer & Basketball
+        if (currentSport === 'soccer' || currentSport === 'basketball') {
+          ball.vy += 0.28 * delta;
+        }
+
+        // Friction deceleration for Air Hockey & Bowling
+        if (currentSport === 'airhockey' || currentSport === 'bowling') {
+          ball.vx *= 0.996;
+          ball.vy *= 0.996;
+        }
+
         ball.trailHistory.unshift({
           x: ball.x,
           y: ball.y,
@@ -922,7 +1041,7 @@ function App() {
         ball.x += ball.vx * delta;
         ball.y += ball.vy * delta;
 
-        // Wall Bounce
+        // Top and Bottom Wall Bounce
         if (
           ball.y - ball.radius <= 24 ||
           ball.y + ball.radius >= FIELD_HEIGHT - 24
@@ -975,18 +1094,18 @@ function App() {
         });
 
         // Paddle Collision
-        const leftPaddleX = 40 + PADDLE_WIDTH;
-        const rightPaddleX = FIELD_WIDTH - 40 - PADDLE_WIDTH;
+        const leftPaddleX = (left.x || 40) + PADDLE_WIDTH;
+        const rightPaddleX = right.x || (FIELD_WIDTH - 40 - PADDLE_WIDTH);
 
         const leftHit =
           ball.x - ball.radius <= leftPaddleX &&
-          ball.x - ball.radius >= leftPaddleX - 18 &&
+          ball.x - ball.radius >= leftPaddleX - 22 &&
           ball.y >= left.y &&
           ball.y <= left.y + left.height;
 
         const rightHit =
           ball.x + ball.radius >= rightPaddleX &&
-          ball.x + ball.radius <= rightPaddleX + 18 &&
+          ball.x + ball.radius <= rightPaddleX + 22 &&
           ball.y >= right.y &&
           ball.y <= right.y + right.height;
 
@@ -994,7 +1113,6 @@ function App() {
           comboCountRef.current += 1;
           setComboCount(comboCountRef.current);
 
-          // Charge Left Rage +20%
           left.rage = Math.min(100, left.rage + 20);
           setLeftRage(left.rage);
 
@@ -1012,11 +1130,9 @@ function App() {
           spawnShockwave(ball.x, ball.y, '#7be3ff');
           triggerCameraShake(ball.isFireball ? 10 : 5);
 
-          // Announcer Milestone Popups
           if (comboCountRef.current === 3) triggerAnnouncer('GREAT RETURN!', '#7be3ff');
           if (comboCountRef.current === 6) triggerAnnouncer('SUPER SMASH!!', '#f6d365');
           if (comboCountRef.current === 10) triggerAnnouncer('UNSTOPPABLE RALLY!!', '#ff5533');
-          if (comboCountRef.current === 15) triggerAnnouncer('HOLY SMASH LEGEND!!', '#ff33cc');
 
           setStats((s) => ({
             ...s,
@@ -1030,7 +1146,6 @@ function App() {
           comboCountRef.current += 1;
           setComboCount(comboCountRef.current);
 
-          // Charge Right Rage +20%
           right.rage = Math.min(100, right.rage + 20);
           setRightRage(right.rage);
 
@@ -1051,7 +1166,6 @@ function App() {
           if (comboCountRef.current === 3) triggerAnnouncer('GREAT RETURN!', '#7be3ff');
           if (comboCountRef.current === 6) triggerAnnouncer('SUPER SMASH!!', '#f6d365');
           if (comboCountRef.current === 10) triggerAnnouncer('UNSTOPPABLE RALLY!!', '#ff5533');
-          if (comboCountRef.current === 15) triggerAnnouncer('HOLY SMASH LEGEND!!', '#ff33cc');
 
           setStats((s) => ({
             ...s,
@@ -1061,14 +1175,14 @@ function App() {
           }));
         }
 
-        // Goal check
+        // Goal Check / Out of bounds check
+        const isGoalMouth = (y: number) => y >= 160 && y <= 400;
+
         if (ball.x < -20) {
-          if (left.shieldActive) {
-            left.shieldActive = false;
+          if ((currentSport === 'airhockey' || currentSport === 'soccer') && !isGoalMouth(ball.y)) {
             ball.vx *= -1;
-            ball.x = 20;
+            ball.x = 24;
             soundFx.playWall();
-            spawnParticles(20, ball.y, '#33ff99', 15);
           } else {
             right.score += 1;
             setScores({ left: left.score, right: right.score });
@@ -1077,6 +1191,8 @@ function App() {
             triggerHitstop(30);
             spawnParticles(ball.x, ball.y, '#f6d365', 35);
             spawnShockwave(ball.x, ball.y, '#f6d365');
+
+            triggerAnnouncer(`POINT FOR ${rightName.toUpperCase()}!`, '#f6d365');
 
             if (right.score >= WIN_SCORE) {
               setMatchWinner(rightName);
@@ -1088,12 +1204,10 @@ function App() {
         }
 
         if (ball.x > FIELD_WIDTH + 20) {
-          if (right.shieldActive) {
-            right.shieldActive = false;
+          if ((currentSport === 'airhockey' || currentSport === 'soccer') && !isGoalMouth(ball.y)) {
             ball.vx *= -1;
-            ball.x = FIELD_WIDTH - 20;
+            ball.x = FIELD_WIDTH - 24;
             soundFx.playWall();
-            spawnParticles(FIELD_WIDTH - 20, ball.y, '#33ff99', 15);
           } else {
             left.score += 1;
             setScores({ left: left.score, right: right.score });
@@ -1102,6 +1216,8 @@ function App() {
             triggerHitstop(30);
             spawnParticles(ball.x, ball.y, '#7be3ff', 35);
             spawnShockwave(ball.x, ball.y, '#7be3ff');
+
+            triggerAnnouncer(`POINT FOR ${leftName.toUpperCase()}!`, '#7be3ff');
 
             if (left.score >= WIN_SCORE) {
               setMatchWinner(leftName);
@@ -1173,6 +1289,20 @@ function App() {
         }}
       />
 
+      {/* Multi-Sport Game Hub Selector */}
+      <SportSelector
+        activeSport={sportType}
+        onSelectSport={(sp) => {
+          setSportType(sp);
+          if (gameMode === 'online' && multiplayerManager.isConnected) {
+            multiplayerManager.sendMessage({
+              type: 'CHANGE_SPORT',
+              payload: { sport: sp },
+            });
+          }
+        }}
+      />
+
       {/* Main Scoreboard Header */}
       <section className="hero-card">
         <div className="hero-copy">
@@ -1199,7 +1329,7 @@ function App() {
 
           <p className="intro">
             {gameMode === 'vs-ai'
-              ? 'Lawan AI Bot canggih! Gunakan W/S untuk raket, tekan E untuk ULTIMATE METEOR SMASH saat bar 100%!'
+              ? 'Lawan AI Bot canggih Vylera Vertex! Gunakan W/S untuk kontrol, tekan E untuk ULTIMATE METEOR SMASH saat bar 100%!'
               : gameMode === 'local'
               ? 'Pemain Kiri (W/S | E), Pemain Kanan (Up/Down | Enter). Isi Bar Ultimate lalu keluarkan Smash mematikan!'
               : 'Main online P2P real-time! Bagikan link room ke lawanmu.'}
@@ -1223,7 +1353,6 @@ function App() {
               </div>
               <div className="player-meta">
                 <span className="player-name">{leftName}</span>
-                {/* Ultimate Meter */}
                 <div className="rage-bar-wrapper">
                   <div
                     className={`rage-bar-fill ${leftRage >= 100 ? 'full-glow' : ''}`}
@@ -1256,7 +1385,6 @@ function App() {
               <div className="player-meta">
                 <span className="player-name">{rightName}</span>
                 {gameMode === 'vs-ai' && <span className="ai-tag">Bot AI</span>}
-                {/* Ultimate Meter */}
                 <div className="rage-bar-wrapper">
                   <div
                     className={`rage-bar-fill ${rightRage >= 100 ? 'full-glow' : ''}`}
@@ -1313,7 +1441,6 @@ function App() {
             )}
           </button>
 
-          {/* Ultimate Skill Trigger Buttons */}
           <button
             type="button"
             className={`ultimate-btn ${leftRage >= 100 ? 'ready' : 'disabled'}`}
@@ -1431,6 +1558,9 @@ function App() {
           onClose={() => setMatchWinner(null)}
         />
       )}
+
+      {/* Vylera Terminal Footer */}
+      <VyleraFooter />
     </main>
   );
 }
